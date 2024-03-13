@@ -1,0 +1,10 @@
+CC=arm-linux-gnueabihf-gcc -static -ggdb3
+.PHONY=clean cleanall
+
+sommaric: sommaric.s
+
+clean:
+	rm -fr sommaric
+cleanall: clean
+	rm -f *~
+

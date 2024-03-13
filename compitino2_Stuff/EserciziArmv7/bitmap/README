@@ -1,0 +1,7 @@
+bitmapmain: versione con programma main in C che legge dallo standard input
+	    ed invoca la funzione assembler ARMv7 printbitad1 (contenuta nel
+	    file printbitad1.s)
+
+bitmapSC:   versione tutta implementata in assembler ARM che utilizza la
+	    system call 'read' per leggere dallo standard input.
+	    
