@@ -1,5 +1,3 @@
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -10,7 +8,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <sys/wait.h>
-#include "../include/macros.h"
+#include "../macro.h"
 
 #define PORT 2000
 #define BUFFER_SIZE 1024
