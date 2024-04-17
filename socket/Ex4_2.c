@@ -60,7 +60,7 @@ void client() {
     // Inizializzazione della struttura server_addr
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
-    server_addr.sin_addr.s_addr = INADDR_LOOPBACK;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
 
     // Connect
     SYSC(retvalue, connect(client_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)), "nella connect");
