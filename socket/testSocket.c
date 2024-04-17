@@ -78,7 +78,7 @@ void client(){
    //inizializzazione struttura server_addr
    server_addr.sin_family = AF_INET;
    server_addr.sin_port = htons(PORT); 
-   server_addr.sin_addr.s_addr = INADDR_LOOPBACK ; //127.0.0.1 usato per comunicare sulla stessa macchina come indirizzo di loopback
+   server_addr.sin_addr.s_addr = INADDR_ANY ; //127.0.0.1 usato per comunicare sulla stessa macchina come indirizzo di loopback
 
    //connect
    SYSC(rv , connect(client_fd , (struct sockaddr*) &server_addr , sizeof(server_addr)), "nella connect");
