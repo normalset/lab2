@@ -1,3 +1,5 @@
+//USARE THREAD_JOIN per aspettare che finisca un thread prima di accettarne un'altro !!!!
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

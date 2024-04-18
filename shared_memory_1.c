@@ -14,16 +14,16 @@
 #define MEM_SIZE 4096
 
 
+
+
 int main(int argc , char *argv[]){
   //controllo argomenti
   if(argc != 2){
     fprintf(stderr, "Usage: %s <nome_file>\n", argv[0]);
     exit(EXIT_FAILURE);
   }
-
   //controllo errore
   int retvalue, mem_fd ;
-
   //creo la shared mem
   SYSC(mem_fd , shm_open(argv[1] , O_CREAT | O_RDWR, 0666), "nella shm_open"); 
   SYSC(retvalue, ftruncate(mem_fd, MEM_SIZE), "nella ftruncate" );
