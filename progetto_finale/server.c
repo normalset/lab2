@@ -1,7 +1,5 @@
 #define _XOPEN_SOURCE 600
 //todo delete player from player list
-//todo scorer thread per calolcare punteggi
-//todo fix add_score function 
 #include <errno.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -51,7 +49,8 @@ int seed =-1;
 int duration = 3 * 60 * 60; //durata di 3 minuti standard in secondi
 char leaderboard[2048] ; 
 
-int gamestate = 0 ; // 0 playing | 1 pause; 
+int gamestate = 0 ; // 0 playing | 1 pause;
+
 
 pthread_barrier_t barrier ; 
 
@@ -86,8 +85,8 @@ Player * players_lis_ptr ;
 #define MAX_NAME 11 
 
 /* 
- * Return 1 if the player with this name in
- * the list. Return 0 if no such player exists.
+ * Return 1 se c'e' un utente con questo nome nella lista
+ * Return 0 se non c'e' nessun utente con quel nome
  */
 int search_player(const char *name, Player *head){
     printf("[ ] Searching for player : %s\n" , name);
@@ -102,21 +101,18 @@ int search_player(const char *name, Player *head){
 }
 
 /*
- * Create a new player with the given name.  Insert it at the tail of the list
- * of players whose head is pointed to by head_player_ptr_ptr.
- *
+ * Crea un nuovo utente con quel nome e aggiungilo alla fine della lista.
  * Return:
- *   0 if successful
- *   1 if a player by this name already exists in this list
- *   2 if the given name cannot fit in the 'name' array
- *       (don't forget about the null terminator)
+ *   0 se viene aggiunto
+ *   1 se il nome e' gia' usato
+ *   2 se il nome e' troppo lungo
  */
-int add_player(const char *name, Player **head_player_ptr_ptr){
+int add_player(const char *name, Player **head_player_ptr){
     printf("Trying to add player : %s \n" , name) ; 
     if (strlen(name) >= MAX_NAME) {
         return 2;
     }
-    if(search_player(name, *head_player_ptr_ptr) == 1){
+    if(search_player(name, *head_player_ptr) == 1){
         return 1;
     }
     else{
@@ -128,23 +124,20 @@ int add_player(const char *name, Player **head_player_ptr_ptr){
         strcpy(new_player->name, name);
         new_player->score = 0;
         new_player->next = NULL;  
-        if(*head_player_ptr_ptr == NULL){
-            *head_player_ptr_ptr = new_player;
+        if(*head_player_ptr == NULL){
+            *head_player_ptr = new_player;
             new_player->next = NULL;
         }else{
-            new_player->next = *head_player_ptr_ptr;
-            *head_player_ptr_ptr = new_player;
+            new_player->next = *head_player_ptr;
+            *head_player_ptr = new_player;
         }
         return 0;
     }
 }
 
 /* 
- * Return a pointer to the player with this name in
- * the list starting with head. Return NULL if no such player exists.
- *
- * NOTE: You'll likely need to cast a (const Player *) to a (Player *)
- * to satisfy the prototype without warnings.
+ * Return un puntatore la giocatore con quel nome nella lista
+ * Return NULL se non trova nulla.
  */
 Player *find_player(const char *name, const Player *head) {
 
@@ -156,8 +149,7 @@ Player *find_player(const char *name, const Player *head) {
 }
 
 /*
- * Print the playernames of all players in the list starting at curr.
- * Names should be printed to standard output, one per line.
+ * Printa la lista dei giocatori con alcune statistiche.
  */
 void list_players(const Player *curr) {
     printf("Player List\n");
@@ -168,11 +160,11 @@ void list_players(const Player *curr) {
 }
 
 /*
- * Finds and deletes a player from the list
+ * Cerca e elimina un giocatore dalla lista dei giocatori
  *
  * Return:
- *   - 0 on success
- *   - 1 if player is not in the list
+ *   - 0 se lo cancella
+ *   - 1 se non trova il giocatore nella lista
  */
 int delete_player(int fd) {
     Player * curr = players_lis_ptr ; 
@@ -180,7 +172,6 @@ int delete_player(int fd) {
      
     // Handle head node
     if (curr != NULL && curr->client_fd == fd) {
-        printf(" TESTING : %d" , curr->client_fd == fd) ; 
         players_lis_ptr = curr->next;
         free(curr);
         return 0;
@@ -188,7 +179,6 @@ int delete_player(int fd) {
 
     //else cerco il giocatore
     while (curr != NULL && curr->client_fd != fd) {
-        printf(" TESTING %d==%d: %d" ,curr->client_fd, fd ,curr->client_fd == fd) ; 
         prev = curr; // Update prev before advancing curr
         curr = curr->next;
     }
@@ -202,11 +192,11 @@ int delete_player(int fd) {
     return 0; 
 }
 /*
- * Finds the player and updates player score
+ * Trova un giocatore e aggiorna il suo score
  *
  * Return:
- *   - 0 on success
- *   - 1 if player is not in the list
+ *   - 0 se ha funzionato
+ *   - 1 se non trova il giocatore
  */
 int add_score(char *name, int score, Player *player_list){
     // Player *player = find_player(name, player_list);
@@ -222,9 +212,7 @@ int add_score(char *name, int score, Player *player_list){
 }
 
 /*
- * Computes the length of the player list
- * 
- * Return: integer length of the list
+ * Calcola e return la lunghezza della lista dei giocatori
  */
 int plist_length(Player *head){
     Player *cur = head;
@@ -236,6 +224,9 @@ int plist_length(Player *head){
     return counter;
 }
 
+/*
+* Resetta a 0 l'indice del numero di parole utilizzate dai diversi giocatori
+*/
 void clear_players_words(Player * curr){
     while (curr != NULL) {
         curr->words_index = 0 ;
@@ -297,15 +288,8 @@ void* client_handler(void* args){
     int rv ; 
     int client_fd = *((int*)args) ;
 
-    Player * profile = malloc(sizeof(Player));
-    //lista delle parole usate , da migliorare usando una q (array da 30 parole da 16 lettere + \0)
     //todo refreshare all'inizio di una partita nuova
-    profile->words_index = 0  ; //index dell'ultima parola aggiunta
-
-    profile->client_fd = client_fd ; 
-    profile->score = 0 ; 
-    printf("[ ] profile client fd : %d\n" , profile->client_fd); 
-
+    Player * profile ; 
     //main loop
     messaggio msg ; 
     while(1){
@@ -317,8 +301,15 @@ void* client_handler(void* args){
             if(rv == 0 ){
                 write_message(client_fd , MSG_OK , NULL) ; 
                 printf("[ ] Added player %s\n" , msg.data) ;
-                strcpy(profile->name , msg.data) ;  
                 list_players(players_lis_ptr) ; 
+                profile = find_player(msg.data , players_lis_ptr);
+                strcpy(profile->name , msg.data) ;  
+                profile->words_index = 0  ; //index dell'ultima parola aggiunta
+                profile->client_fd = client_fd ; 
+                profile->score = 0 ; 
+                //cambio il tipo di messaggio a MSG_MATRICE cosi' che venga mandato subito dopo
+                msg.type = MSG_MATRICE ; 
+
             } else if(rv == 1) {
                 write_message(client_fd , MSG_ERR , "Chose another name");
             } else {
@@ -424,6 +415,9 @@ void * scorer(void * args){
 
     int index = 0 ;
     Player * curr = players_lis_ptr;
+    printf("List players in scorer thread: \n");
+    list_players(players_lis_ptr) ; 
+
     while(curr != NULL){
         scores[index] = curr->score;
         strcpy(names[index] , curr->name);
@@ -465,7 +459,7 @@ void * scorer(void * args){
     //scrivo la leaderboard
     for(int i = 0 ; i < len ; i++){
         char * buf = malloc(sizeof(char) * 32) ;
-        sprintf(buf , ",%s,%d" , names[i], scores[i]); 
+        sprintf(buf , ";%s;%d" , names[i], scores[i]); 
         printf("adding %s to the leaderboard\n", buf) ; 
         strcat(leaderboard , buf) ; 
     }
