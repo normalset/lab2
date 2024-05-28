@@ -1,7 +1,8 @@
-#include "libraries/matrix.h"
+#include "matrix.h"
+#include "macro.h"
 //macro per le chiamate di sistema
 #include <stdlib.h>
-#include "libraries/macro.h"
+#include <ctype.h>
 
 
 #define for_all_matrix( command )\
@@ -10,7 +11,7 @@
 //Macro per convertire il carattere in un index, uso i caratteri da a -> z
 #define char_int(c) ((int)c - (int)'a')
 
-trienode *createnode(){
+trienode *createnode(void){
   trienode *newnode = malloc(sizeof(*newnode));
   
   for(int i = 0 ; i < NUM_CHAR ; i++){
@@ -113,7 +114,6 @@ void load_trie_fromdict(trienode ** root , char * filename){
     // printf("read from file : %s" , buffer);
     trieinsert(root , buffer);
   }
-  int * rv; 
   fclose(dict_file) ; 
 }
 
@@ -217,43 +217,3 @@ char * matrix_to_char(char M[4][4]){
   buf[index] = '\0';
   return buf ; 
 }
-
-
-
-//! TESTING
-// int main(int argc, char *argv[]) {
-//   // definisco la variabile matrice 4 x 4 x 3 (dua char + null terminator)
-//   char M[4][4];
-
-//   // genero la matrice
-//   // generate_letters(M, 1);
-//   // print_matrix(M);
-//   // generate_letters(M, 2);
-//   // print_matrix(M);
-
-//   FILE * matrix_file ;
-//   char * filename = "matrix.txt" ; 
-//   SYSCN(matrix_file , fopen(filename , "r") , "nella fopen");
-//   load_matrix_fromfile( M , matrix_file) ; 
-//   print_matrix(M) ;
-
-//   fclose(matrix_file);   
-
-//   trienode * root = NULL;
-
-//   load_trie_fromdict(&root , "dict.txt");
-
-//   printf("%d %d" , isintrie(&root , "quanto") ,isinmatrix(M , "quanto")) ; 
-  
-  
-//   if(isinmatrix(M , "quanto")){
-//     printf("it fucking works3\n");
-//   }
-//   printf("%d" , isintrie(&root , "quanto") );
-
-//   if(isintrie(&root , "quanto")){
-//     printf("it fucking works4\n");
-//   }
-
-//   return 0;
-// } 

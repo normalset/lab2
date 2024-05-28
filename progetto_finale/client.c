@@ -90,7 +90,6 @@ messaggio read_message(int socket_fd){
 }
 
 void * message_reader(void * args){
-  int rv ; 
   int client_fd = *((int*)args) ;
 
   messaggio msg ; 
@@ -199,15 +198,7 @@ int main(int argc , char * argv[]){
 
   char usr_input[100] ;
 
-  //vars per l'input tokenizzato
-  char * token ;
-  char cmd[20];
   char cmd_arg[20] ;
-  int is_logging = 0 ; 
-  int send_word = 0 ; 
-
-  //general msg
-  messaggio msg ;
 
   //main game loop
   while(1){

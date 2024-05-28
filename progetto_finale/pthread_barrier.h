@@ -47,6 +47,7 @@ extern "C" {
 #endif
 
 typedef struct {
+	char unused[1] ; // aggiunto per evitare il problema ->  warning: empty struct is a GNU extension [-Wgnu-empty-struct]
 } pthread_barrierattr_t;
 
 typedef struct {
