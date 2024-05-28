@@ -38,6 +38,7 @@
 #define MSG_PUNTI_PAROLA 'P'
 #define MSG_CLIENT_QUIT 'Q'
 #define MSG_ALARM 'Z'
+#define MSG_CLASSIFICA 'C'
 
 // variabili globali
 char game_matrix[4][4];
@@ -166,8 +167,8 @@ void list_players(const Player *curr) {
  *   - 0 se lo cancella
  *   - 1 se non trova il giocatore nella lista
  */
-int delete_player(int fd) {
-    Player * curr = players_lis_ptr ; 
+int delete_player(int fd , Player * players_list_head) {
+    Player * curr = players_list_head ; 
     Player * prev = NULL ;
      
     // Handle head node
@@ -227,9 +228,10 @@ int plist_length(Player *head){
 /*
 * Resetta a 0 l'indice del numero di parole utilizzate dai diversi giocatori
 */
-void clear_players_words(Player * curr){
+void clear_players_data(Player * curr){
     while (curr != NULL) {
         curr->words_index = 0 ;
+        curr->score = 0 ; 
         curr = curr->next;
     }
 }
@@ -392,11 +394,20 @@ void* client_handler(void* args){
             profile->words_index = 0 ; 
         }
 
+        //* MESSAGGIO DI CLASSIFICA
+        if(msg.type == MSG_PUNTI_FINALI){
+            if(gamestate == 0){
+                write_message(client_fd , MSG_ERR , "Classifica non disponibile, still playing.");
+            } else {
+                write_message(client_fd , MSG_PUNTI_FINALI , leaderboard) ; 
+            }
+        }
+
         //* MESSAGGIO DI QUIT DAL CLIENT
         if(msg.type == MSG_CLIENT_QUIT){
             //delete player from player list 
             printf("[ ] Player %d left\n" , profile->client_fd) ; 
-            delete_player(profile->client_fd) ; 
+            delete_player(profile->client_fd , players_lis_ptr) ; 
             list_players(players_lis_ptr) ; 
             return NULL ; 
         }
@@ -452,19 +463,23 @@ void * scorer(void * args){
     //Post sort array print
     for(int i = 0 ; i < len ; i++){
         printf("Post Sort Arrays:\n");
-        printf("(%d) %s | %d", i , names[i] , scores[i]) ; 
+        printf("(%d) %s | %d", i+1 , names[i] , scores[i]) ; 
         printf("\n") ;
     }
 
     //scrivo la leaderboard
     for(int i = 0 ; i < len ; i++){
         char * buf = malloc(sizeof(char) * 32) ;
-        sprintf(buf , ";%s;%d" , names[i], scores[i]); 
+        sprintf(buf , "(%d) %s : %d;" , i ,names[i], scores[i]); 
         printf("adding %s to the leaderboard\n", buf) ; 
         strcat(leaderboard , buf) ; 
     }
     //faccio la wait sulla barrier
     pthread_barrier_wait(&barrier) ; 
+
+    //clear gli word indexes nei giocatori e resetta gli score
+    clear_players_data(players_lis_ptr) ; 
+
     printf("[ ] scorer ended\n"); 
     return NULL ; 
 }
@@ -497,10 +512,10 @@ void alarm_handler(int sig){
         }
         printf("New game matrix:\n");
         print_matrix(game_matrix);
-        //riazzero le words used dei giocatori
-        //riazzero i final scores dei giocatori
+
         //cambiare il gamestate
         gamestate = 0 ; 
+        //faccio ripartire il timer 
         alarm(duration) ; 
     }
 }

@@ -36,6 +36,7 @@
 #define MSG_PUNTI_PAROLA 'P'
 #define MSG_CLIENT_QUIT 'Q'
 #define MSG_ALARM 'Z'
+#define MSG_CLASSIFICA 'C'
 
 //varibili globali 
 int logged = 0 ;
@@ -141,7 +142,13 @@ void * message_reader(void * args){
 
     if(msg.type == MSG_PUNTI_FINALI){
       //printa il csv dei punti finali
-      printf("[FINAL] %s \n" , msg.data);
+      printf("[FINAL] Classifica:\n");
+      char * token ; 
+      token = strtok(msg.data , ";");
+      printf("%s\n" , token) ; 
+      while ((token = strtok(NULL , ";")) != NULL){
+        printf("%s\n" , token) ; 
+      } 
     }
 
     if(msg.type == MSG_ALARM){
@@ -260,6 +267,10 @@ int main(int argc , char * argv[]){
       } else { //se non sono loggato devo loggare
         printf("You have to be logged in to guess , log with registra_utente\n");
       }
+    }
+    
+    if(strcmp(usr_input , "classifica") == 0){
+      write_message(client_fd , MSG_PUNTI_FINALI , NULL) ; 
     }
   }
 
