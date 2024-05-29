@@ -133,17 +133,17 @@ void write_message(int socket_fd , char type , char * data){
     length = strlen(data) ;
   }
   //formatto il testo in csv
-  char buffer[100] ; 
+  char buffer[256] ; 
   sprintf(buffer , "%c,%d,%s" , type , length , data);
   //scrivo sulla socket
   int rv ; 
-  SYSC(rv , write(socket_fd , buffer , sizeof(buffer)) , "nella write_message" ) ;
+  SYSC(rv , write(socket_fd , buffer ,( strlen(buffer) + 1 )* sizeof(char)) , "nella write_message" ) ;
   printf("[ ] Wrote Message : %c %d %s\n" , type , length , data) ; 
 }
 
 messaggio read_message(int socket_fd){
   messaggio msg ; 
-  char buffer[100];
+  char buffer[256];
   int rv ; 
   SYSC(rv , read(socket_fd , buffer , sizeof(buffer)), "nella read_message");
   //se il messaggio ha length == 0 prendo solamente il tipo del messaggio senza tokenizzarlo 

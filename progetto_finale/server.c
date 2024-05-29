@@ -1,5 +1,4 @@
 #define _XOPEN_SOURCE 600
-//todo delete player from player list
 #include <errno.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -109,6 +108,7 @@ void* client_handler(void* args){
                 profile->client_fd = client_fd ; 
                 profile->score = 0 ; 
                 //cambio il tipo di messaggio a MSG_MATRICE cosi' che venga mandato subito dopo
+                
                 msg.type = MSG_MATRICE ; 
 
             } else if(rv == 1) {
@@ -210,6 +210,7 @@ void* client_handler(void* args){
             list_players(players_lis_ptr) ; 
             return NULL ; 
         }
+        free(msg.data) ; 
     }
 
     return NULL ; 

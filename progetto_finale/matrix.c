@@ -89,6 +89,21 @@ void printtrie(trienode * root){
   printtrie_rec(root , NULL , 0);
 }
 
+void load_trie_fromdict(trienode **root, char *filename)
+{
+  FILE *dict_file;
+  SYSCN(dict_file, fopen(filename, "r"), "nella fopen");
+
+  char *buffer = malloc(sizeof(char) * 50);
+  while (!feof(dict_file))
+  {
+    fgets(buffer, sizeof(char) * 50, dict_file);
+    // printf("read from file : %s" , buffer);
+    trieinsert(root, buffer);
+  }
+  fclose(dict_file);
+}
+
 void generate_letters(char M[4][4], int seed) {
   srand(seed);
 
@@ -104,18 +119,6 @@ void generate_letters(char M[4][4], int seed) {
   }
 }
 
-void load_trie_fromdict(trienode ** root , char * filename){
-  FILE * dict_file ; 
-  SYSCN(dict_file , fopen(filename , "r") , "nella fopen");
-
-  char * buffer = malloc(sizeof(char) * 50);
-  while(!feof(dict_file)){
-    fgets(buffer , sizeof(char) * 50 , dict_file);
-    // printf("read from file : %s" , buffer);
-    trieinsert(root , buffer);
-  }
-  fclose(dict_file) ; 
-}
 
 //dato che devo essere in grado di leggere dallo stesso file in sequenza matrici diverse apro il file prima e passo il fd
 void load_matrix_fromfile(char M[4][4] , FILE * fd){

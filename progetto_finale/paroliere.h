@@ -28,9 +28,8 @@ typedef struct player{
     int client_fd ;
     char name[11] ;  
     int score; 
-    int final_score ; 
     int words_index ; 
-    char words_used[30][17] ; 
+    char words_used[100][17] ; 
 
     struct player *next ; 
 }Player ; 
