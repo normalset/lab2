@@ -326,10 +326,26 @@ void alarm_handler(int sig){
         printf("New game matrix:\n");
         print_matrix(game_matrix);
 
+        //mando a tutti i client il messaggio per la nuova matrice
+        char * buf = malloc(sizeof(char) * 32) ; 
+        int index = 0;
+        for_all_matrix( buf[index++] = game_matrix[r][c] )
+        // Add the null terminator at the end of the string
+        buf[index] = '\0';
+        
+        //write messages to clients
+        Player * curr = players_lis_ptr ;
+        while(curr != NULL){
+            write_message(curr->client_fd , MSG_MATRICE , buf) ; 
+            curr = curr->next ; 
+        }
+        free(buf); 
+
         //cambiare il gamestate
         gamestate = 0 ; 
         //faccio ripartire il timer 
         alarm(duration) ; 
+
     }
 }
 

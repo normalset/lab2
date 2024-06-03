@@ -211,3 +211,4 @@ messaggio silent_read_message(int socket_fd)
     }
     return msg;
 }
+

@@ -118,3 +118,4 @@ void silent_write_message(int socket_fd, char type, char *);
  * Versione senza print della read_message per il client 
  */
 messaggio silent_read_message(int);
+
