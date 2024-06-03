@@ -96,8 +96,9 @@ void* client_handler(void* args){
     //main loop
     messaggio msg ; 
     while(1){
+        printf("---------------------\n");
         msg = read_message(client_fd) ; 
-        printf("Got : %d , %c , %s\n", msg.length , msg.type , msg.data);
+        // printf("Got : %d , %c , %s\n", msg.length , msg.type , msg.data);
 
         //* REGISTRAZIONE
         if(msg.type == MSG_REGISTRA_UTENTE){
@@ -212,12 +213,17 @@ void* client_handler(void* args){
 
         //* MESSAGGIO DI QUIT DAL CLIENT
         if(msg.type == MSG_CLIENT_QUIT){
-            //delete player from player list 
-            printf("[ ] Player %d left\n" , profile->client_fd) ; 
-            delete_player(profile->client_fd , players_lis_ptr) ; 
-            list_players(players_lis_ptr) ;
-            free(msg.data);
-            return NULL ; 
+            //se non e' ancora neanche loggato chiudo il thread e basta
+            if(!profile->name){
+                return NULL ; 
+            }else{
+                // delete player from player list
+                printf("[ ] Player %d left\n", profile->client_fd);
+                delete_player(profile->client_fd, players_lis_ptr);
+                list_players(players_lis_ptr);
+                free(msg.data);
+                return NULL;
+            }
         }
         free(msg.data) ; 
     }
@@ -278,7 +284,7 @@ void * scorer(void * args){
     //scrivo la leaderboard
     for(int i = 0 ; i < len ; i++){
         char * buf = malloc(sizeof(char) * 32) ;
-        sprintf(buf , "(%d) %s : %d;" , i ,names[i], scores[i]); 
+        sprintf(buf , "(%d) %s : %d;" , i+1 ,names[i], scores[i]); 
         printf("adding %s to the leaderboard\n", buf) ; 
         strcat(leaderboard , buf) ; 
     }
@@ -377,7 +383,6 @@ int main(int argc , char * argv[]){
     };
 
     while((rv = getopt_long(argc, argv, "m:t:s:d:" ,long_options , NULL)) != -1) {
-        printf("test %c\n", rv); 
 
         switch (rv) {
             case 'm':
@@ -424,8 +429,8 @@ int main(int argc , char * argv[]){
     printf("Server name: %s\n", server_name);
     printf("Server port: %d\n", server_port);
     printf("Using custom matrix filename: %d\n", using_matrixfile);
-    printf("Duration: %d seconds (default if not provided)\n", seed);
-    printf("Seed: %d (default 3 min if not provided)\n", seed);
+    printf("Seed: %d (default if not provided)\n", seed);
+    printf("Duration: %d (default 3 min if not provided)\n", duration);
     printf("Dictionary file: %s\n", dictionary_file);
 
     //load dictionary to server usando la trie se sto usando un dizionario

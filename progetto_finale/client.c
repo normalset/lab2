@@ -9,6 +9,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
 
@@ -23,7 +24,8 @@
 //varibili globali 
 int logged = 0 ;
 int score  = 0 ;
-sem_t *prompt_sem ; 
+int alarm_final_score = 0 ;
+sem_t prompt_sem ; 
 
 //messaggi di aiuto
 char *prompt = "[ PROMPT PAROLIERE ]-->";
@@ -42,7 +44,7 @@ void * message_reader(void * args){
       if(msg.length != 0){
         printf("[ERR] %s\n" , msg.data) ; 
       }
-      sem_post(prompt_sem);
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_OK && logged == 0){
@@ -72,34 +74,43 @@ void * message_reader(void * args){
 
     if(msg.type == MSG_TEMPO_PARTITA){
       printf("[TIME] Tempo rimanente nella partita : %s\n", msg.data) ;
-      sem_post(prompt_sem);
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_TEMPO_ATTESA){
       printf("[TIME] Tempo rimanente per la prossima partita : %s\n", msg.data) ;
-      sem_post(prompt_sem);
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_PUNTI_PAROLA){
       printf("[POINTS] Got %s points for that word!\n" , msg.data);
       score += atoi(msg.data);
-      sem_post(prompt_sem);
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_PUNTI_FINALI){
       //printa il csv dei punti finali
-      printf("[FINAL] Classifica:\n");
+      printf("\n[FINAL] Classifica:\n");
       char * token ; 
       token = strtok(msg.data , ";");
       printf("%s\n" , token) ; 
       while ((token = strtok(NULL , ";")) != NULL){
         printf("%s\n" , token) ; 
       }
-      sem_post(prompt_sem);
+
+      //Se e' il messaggio di final score automatico riscrivo il prompt e non posto il semaforo, se e' una richiesta del giocatore posto il semaforo 
+      if(alarm_final_score == 1){
+        int rv ;
+        SYSC(rv, write(STDOUT_FILENO, "[ PROMPT PAROLIERE ]--> ", sizeof("[ PROMPT PAROLIERE ]--> ")), "nella final score write");
+        alarm_final_score = 0;
+      }else{
+        sem_post(&prompt_sem);
+      }
     }
 
     if(msg.type == MSG_ALARM){
       printf("\n------ TIME'S UP ! ------\n") ; 
+      alarm_final_score = 1 ; 
       silent_write_message(client_fd , MSG_ALARM , NULL) ;
     }
     free(msg.data);
@@ -146,12 +157,12 @@ int main(int argc , char * argv[]){
   char cmd_arg[20] ;
 
   //inizializzo il semaforo
-  SYSCN(prompt_sem, sem_open("/prompt_sem", O_CREAT | O_EXCL, 0666, 1), "nella prompt_sem open");
-  // sem_init(prompt_sem , 1 , 1) ; 
+  // SYSCN(&prompt_sem, sem_open("/&prompt_sem", O_CREAT | O_EXCL, 0666, 1), "nella &prompt_sem open");
+  sem_init(&prompt_sem , 1 , 1) ; 
 
   //main game loop
   while(1){
-    sem_wait(prompt_sem) ; 
+    sem_wait(&prompt_sem) ; 
     printf("%s ", prompt);
     scanf("%s" , usr_input) ; 
     // printf("[DEBUG] usr_input : %s\n" , usr_input) ; 
@@ -159,7 +170,7 @@ int main(int argc , char * argv[]){
     // messaggio di aiuto
     if(strcmp(usr_input , "aiuto") == 0){
       printf("%s\n" , msg_aiuto) ;
-      sem_post(prompt_sem) ; 
+      sem_post(&prompt_sem) ; 
       continue ; 
     }
 
@@ -170,17 +181,16 @@ int main(int argc , char * argv[]){
         continue ;
       }else{
         printf("[ERR] Log in to see matrix\n") ;
-        sem_post(prompt_sem);
+        sem_post(&prompt_sem);
         continue; 
       }
     }
 
     //comando fine
     else if(strcmp(usr_input , "fine") == 0){
-      printf("[ ] client exiting");
+      printf("[ ] client exiting\n");
       silent_write_message(client_fd , MSG_CLIENT_QUIT , NULL) ;
-      // sem_destroy(prompt_sem);
-      sem_unlink("/prompt_sem") ; 
+      sem_destroy(&prompt_sem);
       exit(EXIT_SUCCESS);
     }
 
@@ -188,7 +198,7 @@ int main(int argc , char * argv[]){
     else if(strcmp(usr_input , "registra_utente") == 0){
       if(logged){ // se sono gia' loggato non posso usare il comando
         printf("Already logged in");
-        sem_post(prompt_sem);
+        sem_post(&prompt_sem);
         continue; 
       }
       
@@ -198,7 +208,7 @@ int main(int argc , char * argv[]){
       //primo check sulla lunghezza
       if(strlen(cmd_arg) > 10){
         printf("Lunghezza MAX nome superata") ;
-        sem_post(prompt_sem);
+        sem_post(&prompt_sem);
         continue ;
       }
       //scrivo il messaggio con il nome
@@ -213,7 +223,7 @@ int main(int argc , char * argv[]){
         silent_write_message(client_fd , MSG_PAROLA , usr_input);
       } else { //se non sono loggato devo loggare
         printf("You have to be logged in to guess , log with registra_utente\n");
-        sem_post(prompt_sem);
+        sem_post(&prompt_sem);
         continue ; 
       }
     }
@@ -225,7 +235,7 @@ int main(int argc , char * argv[]){
     //input non riconosciuto
     else{
       printf("[ERR] Comando '%s' non riconosciuto\n", usr_input) ; 
-      sem_post(prompt_sem) ; 
+      sem_post(&prompt_sem) ; 
     }
   }
 
