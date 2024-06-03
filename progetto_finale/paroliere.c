@@ -164,3 +164,50 @@ messaggio read_message(int socket_fd){
   printf("[ ] Read Message : %c %d %s\n" , msg.type , msg.length , msg.data) ; 
   return msg ;
 }
+
+void silent_write_message(int socket_fd, char type, char *data)
+{
+    // calcolo la length
+    int length;
+    if (data == NULL)
+    {
+        length = 0;
+    }
+    else
+    {
+        length = strlen(data);
+    }
+    // formatto il testo in csv
+    char buffer[256];
+    sprintf(buffer, "%c,%d,%s", type, length, data);
+    // scrivo sulla socket
+    int rv;
+    SYSC(rv, write(socket_fd, buffer, (strlen(buffer) + 1) * sizeof(char)), "nella write_message");
+}
+
+messaggio silent_read_message(int socket_fd)
+{
+    messaggio msg;
+    char buffer[256];
+    int rv;
+    SYSC(rv, read(socket_fd, buffer, sizeof(buffer)), "nella read_message");
+    // se il messaggio ha length == 0 prendo solamente il tipo del messaggio senza tokenizzarlo
+    if (buffer[2] == '0')
+    {
+        msg.type = buffer[0];
+        msg.length = 0;
+        msg.data = NULL;
+    }
+    else
+    { // se ha length tokenizzo prendendo i 3 campi separati dalla ","
+        char *token;
+        token = strtok(buffer, ",");
+        msg.type = *token;
+        token = strtok(NULL, ",");
+        msg.length = atoi(token);
+        token = strtok(NULL, ",");
+        msg.data = malloc(sizeof(char) * (msg.length + 1));
+        strcpy(msg.data, token);
+    }
+    return msg;
+}

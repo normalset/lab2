@@ -108,3 +108,13 @@ void write_message(int socket_fd , char type , char * );
 * Funzione per leggere un messaggio da una socket e restituire una struct messaggio con tipo-length-data
 */
 messaggio read_message(int );
+
+/*
+ * Versione senza print della write_message per il client
+ */
+void silent_write_message(int socket_fd, char type, char *);
+
+/*
+ * Versione senza print della read_message per il client 
+ */
+messaggio silent_read_message(int);

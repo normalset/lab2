@@ -25,23 +25,30 @@ int logged = 0 ;
 int score  = 0 ;
 sem_t prompt_sem ; 
 
+//messaggi di aiuto
+char *prompt = "[ PROMPT PAROLIERE ]-->";
+
+char *msg_aiuto = "\n\nComandi disponibili : \nregistra_utente [nome] : registrazione alla partita con un nome alfanumerico lungo max 10 caratteri,\nmatrice :\n  -se la partita e' in corso mostra la board corrente e il tempo rimanente\n  -se la partita e' finita mostra il tempo di attesa\np [parola_indicata] : permette di inviare una guess al server, punteggi ottenuti solo una volta per parola!\nfine : disconette il client dal serfer e termina la sessione con il server\nclassifica: dopo la fine di una partita per vedere il risultato\n\n";
+
 void * message_reader(void * args){
   int client_fd = *((int*)args) ;
 
   messaggio msg ; 
   while(1){
     //legge il messaggio 
-    msg = read_message(client_fd) ; 
+    msg = silent_read_message(client_fd) ; 
 
     if(msg.type == MSG_ERR){
       if(msg.length != 0){
         printf("[ERR] %s\n" , msg.data) ; 
       }
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_OK && logged == 0){
       logged = 1 ;
       printf("[ ] Now logged in\n") ; 
+      silent_write_message(client_fd , MSG_MATRICE , NULL);
     }
 
     if(msg.type == MSG_PUNTI_PAROLA){
@@ -60,19 +67,23 @@ void * message_reader(void * args){
           }
           printf("|\n");
         }
+        silent_write_message(client_fd , MSG_TEMPO_PARTITA , NULL);
     }
 
     if(msg.type == MSG_TEMPO_PARTITA){
-      printf("[TIME] Tempo rimanente nella partita : %s\n", msg.data) ; 
+      printf("[TIME] Tempo rimanente nella partita : %s\n", msg.data) ;
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_TEMPO_ATTESA){
-      printf("[TIME] Tempo rimanente per la prossima partita : %s\n", msg.data) ; 
+      printf("[TIME] Tempo rimanente per la prossima partita : %s\n", msg.data) ;
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_PUNTI_PAROLA){
       printf("[POINTS] Got %s points for that word!\n" , msg.data);
-      score += atoi(msg.data); 
+      score += atoi(msg.data);
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_PUNTI_FINALI){
@@ -83,25 +94,17 @@ void * message_reader(void * args){
       printf("%s\n" , token) ; 
       while ((token = strtok(NULL , ";")) != NULL){
         printf("%s\n" , token) ; 
-      } 
+      }
+      sem_post(&prompt_sem);
     }
 
     if(msg.type == MSG_ALARM){
-      printf("------ TIME'S UP ! ------\n") ; 
-      write_message(client_fd , MSG_ALARM , NULL) ; 
-    }
-    //Dato che il messaggio matrice e' sempre seguito da un messaggio tempo_rimanente per evitare di postare due volte il semaforo faccio questo controllo
-    if(msg.type != MSG_MATRICE){
-      printf("[DEGUB] Posting sem\n") ; 
-      sem_post(&prompt_sem);
+      printf("\n------ TIME'S UP ! ------\n") ; 
+      silent_write_message(client_fd , MSG_ALARM , NULL) ;
     }
     free(msg.data);
   }
 }
-
-char * prompt = "[ PROMPT PAROLIERE ]-->" ; 
-
-char * msg_aiuto = "\n\nComandi disponibili : \nregistra_utente [nome] : registrazione alla partita con un nome alfanumerico lungo max 10 caratteri,\nmatrice :\n  -se la partita e' in corso mostra la board corrente e il tempo rimanente\n  -se la partita e' finita mostra il tempo di attesa\np [parola_indicata] : permette di inviare una guess al server, punteggi ottenuti solo una volta per parola!\nfine : disconette il client dal serfer e termina la sessione con il server\nclassifica: dopo la fine di una partita per vedere il risultato\n\n";
 
 int main(int argc , char * argv[]){
   if(argc != 3){
@@ -162,7 +165,7 @@ int main(int argc , char * argv[]){
     //comando matrice
     else if(strcmp(usr_input , "matrice") == 0 ){
       if(logged){//mando un messaggio matrice al server
-        write_message(client_fd , MSG_MATRICE , NULL) ;
+        silent_write_message(client_fd , MSG_MATRICE , NULL) ;
         continue ;
       }else{
         printf("[ERR] Log in to see matrix\n") ;
@@ -174,7 +177,7 @@ int main(int argc , char * argv[]){
     //comando fine
     else if(strcmp(usr_input , "fine") == 0){
       printf("[ ] client exiting");
-      write_message(client_fd , MSG_CLIENT_QUIT , NULL) ;
+      silent_write_message(client_fd , MSG_CLIENT_QUIT , NULL) ;
       sem_destroy(&prompt_sem);
       exit(EXIT_SUCCESS);
     }
@@ -197,7 +200,7 @@ int main(int argc , char * argv[]){
         continue ;
       }
       //scrivo il messaggio con il nome
-      write_message(client_fd , MSG_REGISTRA_UTENTE , usr_input) ;
+      silent_write_message(client_fd , MSG_REGISTRA_UTENTE , usr_input) ;
     }
 
     //comando parola
@@ -205,7 +208,7 @@ int main(int argc , char * argv[]){
       if(logged){ // se sono loggato posso proporre una parola
         // printf("[ ] type guess : ");
         scanf("%s" , usr_input) ; 
-        write_message(client_fd , MSG_PAROLA , usr_input);
+        silent_write_message(client_fd , MSG_PAROLA , usr_input);
       } else { //se non sono loggato devo loggare
         printf("You have to be logged in to guess , log with registra_utente\n");
         sem_post(&prompt_sem);
@@ -214,7 +217,7 @@ int main(int argc , char * argv[]){
     }
     
     else if(strcmp(usr_input , "classifica") == 0){
-      write_message(client_fd , MSG_PUNTI_FINALI , NULL) ; 
+      silent_write_message(client_fd , MSG_PUNTI_FINALI , NULL) ; 
     }
 
     //input non riconosciuto

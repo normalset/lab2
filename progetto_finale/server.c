@@ -76,7 +76,11 @@ int delete_player(int fd , Player * players_list_head) {
     return 0; 
 }
 
-bool is_word_used(char words_used[30][17] ,int words_index , char * word){
+/*
+* Funzione per controllare se una parola e' goa' stata usata da un determinatio client durante una partita
+* ARGS : lista di parole usate , index della lista di parole , parola da controllare
+*/
+bool is_word_used(char words_used[100][17] ,int words_index , char * word){
     for(int i = 0 ; i < words_index ; i++){
         if(strcmp(words_used[i] , word) == 0) return true ;
     }
@@ -88,13 +92,13 @@ void* client_handler(void* args){
     int rv ; 
     int client_fd = *((int*)args) ;
 
-    //todo refreshare all'inizio di una partita nuova
     Player * profile ; 
     //main loop
     messaggio msg ; 
     while(1){
         msg = read_message(client_fd) ; 
         printf("Got : %d , %c , %s\n", msg.length , msg.type , msg.data);
+
         //* REGISTRAZIONE
         if(msg.type == MSG_REGISTRA_UTENTE){
             rv = add_player(msg.data , &players_lis_ptr) ; 
@@ -107,9 +111,6 @@ void* client_handler(void* args){
                 profile->words_index = 0  ; //index dell'ultima parola aggiunta
                 profile->client_fd = client_fd ; 
                 profile->score = 0 ; 
-                //cambio il tipo di messaggio a MSG_MATRICE cosi' che venga mandato subito dopo
-                
-                msg.type = MSG_MATRICE ; 
 
             } else if(rv == 1) {
                 write_message(client_fd , MSG_ERR , "Chose another name");
@@ -117,6 +118,7 @@ void* client_handler(void* args){
                 write_message(client_fd , MSG_ERR , "Name Too Long");
             }
         }
+
         //* RICHIESTA MATRICE 
         if(msg.type == MSG_MATRICE){
             if(gamestate == 0 ){ //mando la matrice di gioco e il tempo rimanente
@@ -129,24 +131,31 @@ void* client_handler(void* args){
                 //write message
                 write_message(client_fd , MSG_MATRICE , buf) ;
                 free(buf); 
+            }else{
+                //se sono in pausa devo solo mandare il tempo di attesa
+                msg.type = MSG_TEMPO_PARTITA ; 
+            }
+        }
 
-                //tempo
-                char* timebuffer = malloc(sizeof(char) * 32);
+        //* MESSAGGIO DI RICHIESTA TEMPO
+        if(msg.type == MSG_TEMPO_PARTITA){
+            if(gamestate == 0){
+                char *timebuffer = malloc(sizeof(char) * 32);
                 int timer_left = alarm(0);
-                alarm(timer_left) ; //prendo il tempo rimanente resettando con alarm(0) e faccio ripartire un nuovo alarm con il tempo rimanente
-                sprintf(timebuffer , "%d" , timer_left) ; 
-                write_message(client_fd , MSG_TEMPO_PARTITA , timebuffer) ; 
+                alarm(timer_left); // prendo il tempo rimanente resettando con alarm(0) e faccio ripartire un nuovo alarm con il tempo rimanente
+                sprintf(timebuffer, "%d", timer_left);
+                write_message(client_fd, MSG_TEMPO_PARTITA, timebuffer);
                 free(timebuffer);
-            }else{//mando solo il tempo di attesa rimanente
-                char* timebuffer = malloc(sizeof(char) * 32);
+            }else{ // mando solo il tempo di attesa rimanente
+                char *timebuffer = malloc(sizeof(char) * 32);
                 int timer_left = alarm(0);
-                alarm(timer_left) ; //prendo il tempo rimanente resettando con alarm(0) e faccio ripartire un nuovo alarm con il tempo rimanente
-                sprintf(timebuffer , "%d" , timer_left) ; 
-                write_message(client_fd , MSG_TEMPO_ATTESA , timebuffer) ; 
+                alarm(timer_left); // prendo il tempo rimanente resettando con alarm(0) e faccio ripartire un nuovo alarm con il tempo rimanente
+                sprintf(timebuffer, "%d", timer_left);
+                write_message(client_fd, MSG_TEMPO_ATTESA, timebuffer);
                 free(timebuffer);
             }
-
         }
+
         //* PROPOSTA PAROLA | Parola giusta -> controllo se gia' stata usata -> messaggio punti | Parola sbagliata -> messaggio errore
         if(msg.type == MSG_PAROLA){
             //se il gamestate = 1 non posso proporre parole quindi salto
@@ -164,7 +173,6 @@ void* client_handler(void* args){
                         for(int c = 0 ; c < strlen(msg.data) ; c++){
                             if(msg.data[c] != 'q') points++ ; 
                         }
-                        profile->score += points ; 
                         char * points_buffer = malloc(sizeof(char) * 10) ; 
                         sprintf(points_buffer , "%d" , points) ; 
                         write_message(client_fd , MSG_PUNTI_PAROLA , points_buffer );
@@ -207,7 +215,8 @@ void* client_handler(void* args){
             //delete player from player list 
             printf("[ ] Player %d left\n" , profile->client_fd) ; 
             delete_player(profile->client_fd , players_lis_ptr) ; 
-            list_players(players_lis_ptr) ; 
+            list_players(players_lis_ptr) ;
+            free(msg.data);
             return NULL ; 
         }
         free(msg.data) ; 
@@ -218,7 +227,6 @@ void* client_handler(void* args){
 
 void * scorer(void * args){
     printf("[ ] scorer started\n");
-    list_players(players_lis_ptr) ; 
     //lista dei client controllati 
     int len = plist_length(players_lis_ptr);
     int scores[len] ; 
@@ -276,6 +284,7 @@ void * scorer(void * args){
     }
     //faccio la wait sulla barrier
     pthread_barrier_wait(&barrier) ; 
+    pthread_barrier_destroy(&barrier) ; 
 
     //clear gli word indexes nei giocatori e resetta gli score
     clear_players_data(players_lis_ptr) ; 
@@ -306,6 +315,10 @@ void alarm_handler(int sig){
         //se sono in pausa faccio ripartire la partita
         //genero/leggo la prossima matrice
         if(using_matrixfile){
+            //nel caso in cui abbia raggiunto la fine del file ricomincio dall'inizio
+            if(feof(matrix_fd)){
+                fseek(matrix_fd, 0, 0);
+            }
             load_matrix_fromfile(game_matrix , matrix_fd) ; 
         } else {
             generate_letters(game_matrix , seed) ; 
@@ -441,18 +454,17 @@ int main(int argc , char * argv[]){
 
     //client accepting loop
     while(1){
+        SYSC(client_fd, accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len), "nella accept");
 
-    SYSC(client_fd, accept(server_fd, (struct sockaddr *)&client_addr, &client_addr_len), "nella accept");
+        printf("New Client connected %d!\n" , client_fd); 
 
-    printf("New Client connected %d!\n" , client_fd); 
-
-    pthread_t client_tid ; 
-    if(pthread_create(&client_tid , NULL , &client_handler , (void*)&client_fd) != 0){
-        perror("Errore nella pthread create");
-        close(client_fd) ;
-        continue ; 
-    }
-}
+        pthread_t client_tid ; 
+        if(pthread_create(&client_tid , NULL , &client_handler , (void*)&client_fd) != 0){
+            perror("Errore nella pthread create");
+            close(client_fd) ;
+            continue ; 
+        }
+    }   
     if(using_matrixfile) fclose(matrix_fd);
     exit(EXIT_SUCCESS);
 }
