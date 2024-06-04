@@ -19,7 +19,6 @@
 
 //librerie custom
 #include "matrix.c"
-#include "pthread_barrier.c" //libreria custom per barriers su macos -> credits https://github.com/ademakov/DarwinPthreadBarrier
 #include "paroliere.c"
 
 //defines
