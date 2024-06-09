@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <signal.h>
 
 //librerie custom
 #include "matrix.c"
@@ -21,11 +22,23 @@
 #define BUFFER_SIZE 1024
 #define MAX_CLIENTS 32
 
-//varibili globali 
-int logged = 0 ;
+//varibili globali
+int client_fd ;
+int logged = 0;
 int score  = 0 ;
 int alarm_final_score = 0 ;
 sem_t prompt_sem ; 
+
+//SigInt handler
+void my_signal_handler(int signum)
+{
+  printf("[ ] client exiting\n");
+  silent_write_message(client_fd, MSG_CLIENT_QUIT, NULL);
+  sem_destroy(&prompt_sem);
+  close(client_fd) ; 
+  exit(EXIT_SUCCESS);
+
+}
 
 //messaggi di aiuto
 char *prompt = "[ PROMPT PAROLIERE ]-->";
@@ -122,7 +135,13 @@ int main(int argc , char * argv[]){
       perror("Args sbagliati , ./paroliere_cl , nome_server porta_server");
       exit(EXIT_FAILURE);
   }
-  
+
+  // Aggiungo il signal handler a SIGINT
+  if (signal(SIGINT, my_signal_handler) == SIG_ERR)
+  {
+    perror("nella signal del client");
+    return 1;
+  }
 
   //server name
   char *server_name = malloc(sizeof(char) * 25) ;
@@ -130,7 +149,7 @@ int main(int argc , char * argv[]){
   //server port
   int server_port = atoi(argv[2]);
   // variabili
-  int rv , client_fd;
+  int rv ;
   struct sockaddr_in server_addr;
     
   // Creazione del socket
@@ -191,6 +210,7 @@ int main(int argc , char * argv[]){
       printf("[ ] client exiting\n");
       silent_write_message(client_fd , MSG_CLIENT_QUIT , NULL) ;
       sem_destroy(&prompt_sem);
+      close(client_fd); 
       exit(EXIT_SUCCESS);
     }
 

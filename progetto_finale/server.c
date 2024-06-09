@@ -92,6 +92,7 @@ void* client_handler(void* args){
     int client_fd = *((int*)args) ;
 
     Player * profile ; 
+    int logged = 0 ; 
     //main loop
     messaggio msg ; 
     while(1){
@@ -111,6 +112,7 @@ void* client_handler(void* args){
                 profile->words_index = 0  ; //index dell'ultima parola aggiunta
                 profile->client_fd = client_fd ; 
                 profile->score = 0 ; 
+                logged = 1 ; 
 
             } else if(rv == 1) {
                 write_message(client_fd , MSG_ERR , "Chose another name");
@@ -212,17 +214,17 @@ void* client_handler(void* args){
 
         //* MESSAGGIO DI QUIT DAL CLIENT
         if(msg.type == MSG_CLIENT_QUIT){
-            //se non e' ancora neanche loggato chiudo il thread e basta
-            if(!profile->name){
-                return NULL ; 
-            }else{
+            printf("Got a quit msg\n"); 
+            //se non e' ancora neanche loggato chiudo il thread e basta, se e' loggato elimino il profilo dalla lista
+            if( logged == 1 ){
                 // delete player from player list
                 printf("[ ] Player %d left\n", profile->client_fd);
                 delete_player(profile->client_fd, players_lis_ptr);
                 list_players(players_lis_ptr);
-                free(msg.data);
-                return NULL;
             }
+            close(client_fd);
+            free(msg.data);
+            return NULL;
         }
         free(msg.data) ; 
     }
