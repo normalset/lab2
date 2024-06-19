@@ -22,6 +22,7 @@
 #define BUFFER_SIZE 1024
 #define MAX_CLIENTS 32
 
+
 //varibili globali
 int client_fd ;
 int logged = 0;
@@ -115,9 +116,9 @@ void * message_reader(void * args){
       if(alarm_final_score == 1){
         int rv ;
         SYSC(rv, write(STDOUT_FILENO, "[ PROMPT PAROLIERE ]--> ", sizeof("[ PROMPT PAROLIERE ]--> ")), "nella final score write");
-        alarm_final_score = 0;
+        // alarm_final_score = 0;
       }else{
-        sem_post(&prompt_sem);
+        // sem_post(&prompt_sem);
       }
     }
 

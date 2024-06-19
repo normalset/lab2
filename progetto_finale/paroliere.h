@@ -10,6 +10,7 @@
 #define MSG_CLIENT_QUIT 'Q'
 #define MSG_ALARM 'Z'
 #define MSG_CLASSIFICA 'C'
+#define MSG_PRINT_PROMPT 'L'
 
 //Lunghezza massima del nome
 #define MAX_NAME 11

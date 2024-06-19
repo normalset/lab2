@@ -328,7 +328,7 @@ void alarm_handler(int sig){
             }
             load_matrix_fromfile(game_matrix , matrix_fd) ; 
         } else {
-            generate_letters(game_matrix , seed) ; 
+            generate_letters(game_matrix , seed + rand()) ; //faccio questo per avere matrici diverse ma che dipendono dal seed, per non avere sempre lo stesso risultato
         }
         printf("New game matrix:\n");
         print_matrix(game_matrix);
@@ -445,6 +445,9 @@ int main(int argc , char * argv[]){
     //print per debug della matrice in uso
     printf("Starting Matrix:\n");
     print_matrix(game_matrix);
+
+    //seeddo il random
+    srand(seed) ; 
 
     //faccio partire l'alarm per il timer della partita e associo l'handler all'evento 
     struct sigaction sa ; 
