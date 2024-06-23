@@ -18,8 +18,8 @@
 //typedef messaggio , inviare solo i byte significativi del messaggio e non un biffer di lunghezza fissa
 typedef struct messaggio {
     char type ; 
-    unsigned int length ; //0 nel caso in cui il campo data non e' significativo
-    char * data ; //dati effettivi
+    int length ; //0 nel caso in cui il campo data non e' significativo
+    char data[512]; //dati effettivi
 }messaggio ; 
 
 /*
@@ -31,6 +31,7 @@ typedef struct player{
     int score; 
     int words_index ; 
     char words_used[100][17] ; 
+    pthread_mutex_t p_mux ; 
 
     struct player *next ; 
 }Player ; 

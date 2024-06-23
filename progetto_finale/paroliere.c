@@ -5,6 +5,8 @@
 #include <string.h>
 #include <unistd.h>
 
+
+
 /* 
  * Return 1 se c'e' un utente con questo nome nella lista
  * Return 0 se non c'e' nessun utente con quel nome
@@ -117,49 +119,43 @@ int plist_length(Player *head){
 * Resetta a 0 l'indice del numero di parole utilizzate dai diversi giocatori
 */
 void clear_players_data(Player * curr){
+    printf("Clearing players data\n");
     while (curr != NULL) {
+        pthread_mutex_lock(&(curr->p_mux)) ; 
         curr->words_index = 0 ;
         curr->score = 0 ; 
+        pthread_mutex_unlock(&(curr->p_mux));
         curr = curr->next;
     }
 }
 
 void write_message(int socket_fd , char type , char * data){
-  //calcolo la length
-  int length ; 
-  if(data == NULL){
-    length = 0 ; 
-  }else {
-    length = strlen(data) ;
-  }
-  //formatto il testo in csv
-  char buffer[256] ; 
-  sprintf(buffer , "%c,%d,%s" , type , length , data);
-  //scrivo sulla socket
-  int rv ; 
-  SYSC(rv , write(socket_fd , buffer ,( strlen(buffer) + 1 )* sizeof(char)) , "nella write_message" ) ;
-  printf("[ ] Wrote Message : %c %d %s\n" , type , length , data) ; 
+    //calcolo la length
+    int length ; 
+    if(data == NULL){
+        length = 0 ; 
+    }else {
+        length = strlen(data) + 1; // +1 per tenere conto del \0 alla fine della stringa
+    }
+
+    //type -> lenght -> ?data
+    int rv;
+    SYSC(rv, write(socket_fd, &type, sizeof(char)), "nella write_message");
+    SYSC(rv, write(socket_fd, &length, sizeof(int)), "nella write_message");
+    if(length > 0){
+        SYSC(rv, write(socket_fd, data, sizeof(char) * length), "nella write_message");
+    }
+    printf("[ ] Wrote Message : %c %d %s\n" , type , length , data) ; 
 }
 
 messaggio read_message(int socket_fd){
   messaggio msg ; 
-  char buffer[256];
   int rv ; 
-  SYSC(rv , read(socket_fd , buffer , sizeof(buffer)), "nella read_message");
+  SYSC(rv , read(socket_fd , &(msg.type) , sizeof(char)), "nella read_message");
+  SYSC(rv , read(socket_fd , &(msg.length) , sizeof(int)), "nella read_message");
   //se il messaggio ha length == 0 prendo solamente il tipo del messaggio senza tokenizzarlo 
-  if(buffer[2] == '0'){
-    msg.type = buffer[0] ;
-    msg.length = 0 ;
-    msg.data = NULL ;
-  } else { // se ha length tokenizzo prendendo i 3 campi separati dalla ","
-    char * token ;
-    token = strtok(buffer , ",");
-    msg.type = *token;
-    token = strtok(NULL , ",");
-    msg.length = atoi(token);
-    token = strtok(NULL , ",");
-    msg.data = malloc(sizeof(char) * (msg.length + 1));
-    strcpy(msg.data , token) ;
+  if(msg.length > 0 ){
+    SYSC(rv, read(socket_fd, msg.data, sizeof(char) * msg.length), "nella write_message");
   }
   printf("[ ] Read Message : %c %d %s\n" , msg.type , msg.length , msg.data) ; 
   return msg ;
@@ -169,45 +165,31 @@ void silent_write_message(int socket_fd, char type, char *data)
 {
     // calcolo la length
     int length;
-    if (data == NULL)
-    {
+    if (data == NULL){
         length = 0;
     }
-    else
-    {
-        length = strlen(data);
+    else{
+        length = strlen(data) + 1; // +1 per tenere conto del \0 alla fine della stringa
     }
-    // formatto il testo in csv
-    char buffer[256];
-    sprintf(buffer, "%c,%d,%s", type, length, data);
-    // scrivo sulla socket
+
+    // type -> lenght -> ?data
     int rv;
-    SYSC(rv, write(socket_fd, buffer, (strlen(buffer) + 1) * sizeof(char)), "nella write_message");
+    SYSC(rv, write(socket_fd, &type, sizeof(char)), "nella write_message");
+    SYSC(rv, write(socket_fd, &length, sizeof(int)), "nella write_message");
+    if (length > 0){
+        SYSC(rv, write(socket_fd, data, sizeof(char) * length), "nella write_message");
+    }
 }
 
 messaggio silent_read_message(int socket_fd)
 {
     messaggio msg;
-    char buffer[256];
     int rv;
-    SYSC(rv, read(socket_fd, buffer, sizeof(buffer)), "nella read_message");
+    SYSC(rv, read(socket_fd, &(msg.type), sizeof(char)), "nella read_message");
+    SYSC(rv, read(socket_fd, &(msg.length), sizeof(int)), "nella read_message");
     // se il messaggio ha length == 0 prendo solamente il tipo del messaggio senza tokenizzarlo
-    if (buffer[2] == '0')
-    {
-        msg.type = buffer[0];
-        msg.length = 0;
-        msg.data = NULL;
-    }
-    else
-    { // se ha length tokenizzo prendendo i 3 campi separati dalla ","
-        char *token;
-        token = strtok(buffer, ",");
-        msg.type = *token;
-        token = strtok(NULL, ",");
-        msg.length = atoi(token);
-        token = strtok(NULL, ",");
-        msg.data = malloc(sizeof(char) * (msg.length + 1));
-        strcpy(msg.data, token);
+    if (msg.length > 0){
+        SYSC(rv, read(socket_fd, msg.data, sizeof(char) * msg.length), "nella write_message");
     }
     return msg;
 }
