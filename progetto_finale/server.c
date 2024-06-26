@@ -18,13 +18,14 @@
 #include <getopt.h>
 
 //librerie custom
-#include "matrix.c"
-#include "paroliere.c"
+#include "libraries/matrix.c"
+#include "libraries/paroliere.c"
+
 
 //defines
 #define BUFFER_SIZE 1024
 #define MAX_CLIENTS 32
-#define mux_f(f,mux) pthread_mutex_lock(&(mux));f;pthread_mutex_unlock(&(mux)) 
+
 
 // variabili globali  
 char game_matrix[4][4];
@@ -114,7 +115,6 @@ void* client_handler(void* args){
     messaggio msg ; 
     while(1){
         printf("---------------------\n");
-        sleep(rand() % 2) ; //da togliere
         msg = read_message(client_fd) ; 
 
         //* REGISTRAZIONE
@@ -122,16 +122,16 @@ void* client_handler(void* args){
             rv = mux_f(add_player(msg.data , &players_lis_ptr) , players_mux) ; 
             if(rv == 0 ){ //se posso aggiungerlo alla lista dei giocatori
                 pthread_mutex_lock(&players_mux) ; //blocco la lista mentre faccio le operazioni
-                write_message(client_fd , MSG_OK , NULL) ; 
-                printf("[ ] Added player %s\n" , msg.data) ;
-                list_players(players_lis_ptr) ; 
-                profile = find_player(msg.data , players_lis_ptr);
-                strcpy(profile->name , msg.data) ;  
-                profile->words_index = 0  ; //index dell'ultima parola aggiunta
-                profile->client_fd = client_fd ; 
-                profile->score = 0 ;
-                pthread_mutex_init(&(profile->p_mux), NULL); //inizializzo il suo mux personale
-                logged = 1 ;
+                    write_message(client_fd , MSG_OK , NULL) ; 
+                    printf("[ ] Added player %s\n" , msg.data) ;
+                    list_players(players_lis_ptr) ; 
+                    profile = find_player(msg.data , players_lis_ptr);
+                    strcpy(profile->name , msg.data) ;  
+                    profile->words_index = 0  ; //index dell'ultima parola aggiunta
+                    profile->client_fd = client_fd ; 
+                    profile->score = 0 ;
+                    pthread_mutex_init(&(profile->p_mux), NULL); //inizializzo il suo mux personale
+                    logged = 1 ;
                 pthread_mutex_unlock(&players_mux);
             } else if(rv == 1) {
                 mux_f(write_message(client_fd , MSG_ERR , "Chose another name"), profile->p_mux);
@@ -160,30 +160,34 @@ void* client_handler(void* args){
 
         //* MESSAGGIO DI RICHIESTA TEMPO
         if(msg.type == MSG_TEMPO_PARTITA){
-            int autom = 0 ; //autom
+            int autom = 0 ;
             if(gamestate == 0){
                 if(strcmp(msg.data , "!") == 0 ){
                     autom = 1 ; 
                 }
                 pthread_mutex_lock(&alarm_mux);
-                char timebuffer[32];
-                if(autom){ // autom
-                    timebuffer[0] = '!';
-                    get_alarm_time(timebuffer+1);
-                }else{
-                    get_alarm_time(timebuffer);
-                }
+                    char timebuffer[32];
+                    //controllo se la richiesta dal server e' stata dell'utente o automatica
+                    if(autom){ 
+                        timebuffer[0] = '!';
+                        get_alarm_time(timebuffer+1);
+                    }else{
+                        get_alarm_time(timebuffer);
+                    }
                 pthread_mutex_unlock(&alarm_mux);
                 
                 mux_f(write_message(client_fd, MSG_TEMPO_PARTITA, timebuffer), profile->p_mux);
             }else{ // mando solo il tempo di attesa rimanente
                 char timebuffer[32];
-                get_alarm_time(timebuffer) ; 
-                write_message(client_fd, MSG_TEMPO_ATTESA, timebuffer);
+                mux_f(get_alarm_time(timebuffer), alarm_mux) ; 
+                mux_f(write_message(client_fd, MSG_TEMPO_ATTESA, timebuffer) , profile->p_mux);
             }
         }
 
-        //* PROPOSTA PAROLA | Parola giusta -> controllo se gia' stata usata -> messaggio punti | Parola sbagliata -> messaggio errore
+        /*
+         * PROPOSTA PAROLA | Parola giusta -> controllo se gia' stata usata -> messaggio punti | Parola sbagliata -> messaggio errore
+         * Il check sulle parole con len<4 e' gia' stato fatto dal client 
+         */
         if(msg.type == MSG_PAROLA){
             //se il gamestate = 1 non posso proporre parole quindi salto
             if(gamestate == 1){
@@ -191,7 +195,7 @@ void* client_handler(void* args){
             }else{
                 //controllo se la parola e' gia' stata usata
 
-                //lock sul mutex del profilo per non fare aggiungere dati nuovi mentre controlla, non blocco la matrice perche' il cambio viene fatto quando il comando parola non funziona perche'in pausa
+                //lock sul mutex del profilo per non fare aggiungere dati nuovi mentre controlla, non blocco la matrice perche' il cambio viene fatto quando il comando parola non funziona nella pausa
                 pthread_mutex_lock((&(profile->p_mux))) ; 
 
                 if( ! is_word_used(profile->words_used , profile->words_index , msg.data)){
@@ -210,7 +214,7 @@ void* client_handler(void* args){
                         free(points_buffer) ;
 
                         // aggiungo i punti  allo score dell client
-                        mux_f(add_score(profile->name , points , players_lis_ptr), players_mux) ; 
+                        mux_f(add_score(profile->name , points , players_lis_ptr), profile->p_mux) ; 
                     }else{
                         write_message(client_fd , MSG_ERR , "Wrong choice :("); 
                     }
@@ -248,19 +252,21 @@ void* client_handler(void* args){
 
         //* MESSAGGIO DI QUIT DAL CLIENT
         if(msg.type == MSG_CLIENT_QUIT){
-            printf("Got a quit msg\n"); 
+            printf("[ %d ]Got a quit msg \n", client_fd); // uso il client_fd passato al thread perche' potrebbe non essere ancora stato fatto il login  
             //se non e' ancora neanche loggato chiudo il thread e basta, se e' loggato elimino il profilo dalla lista
             if( logged == 1 ){
-                // delete player from player list while locking it 
+                // delete player dalla player list bloccandola mentre lo faccio 
                 pthread_mutex_lock(&players_mux);
 
                     printf("[ ] Player %d left\n", profile->client_fd);
+                    pthread_mutex_destroy(&(profile->p_mux)) ; 
                     delete_player(profile->client_fd, players_lis_ptr);
                     list_players(players_lis_ptr);
 
                 pthread_mutex_unlock(&players_mux);
             }
             close(client_fd);
+            pthread_detach(pthread_self()) ; 
             return NULL;
         }
     }
@@ -320,20 +326,22 @@ void * scorer(void * args){
         printf("\n") ;
     }
 
-    //scrivo la leaderboard
+    //scrivo la leaderboard, lock mentre scrivo
     pthread_mutex_lock(&leaderboard_mux) ; 
 
     //svuoto la leaderboard prima di scriverla per cancellare i risultati vecchi
     memset(leaderboard , 0 , sizeof(leaderboard)) ; 
+
     for(int i = 0 ; i < len ; i++){
         char * buf = malloc(sizeof(char) * 32) ;
         sprintf(buf , "(%d) %s : %d;" , i+1 ,names[i], scores[i]); 
         printf("adding %s to the leaderboard\n", buf) ; 
         strcat(leaderboard , buf) ; 
     }
+
     pthread_mutex_unlock(&leaderboard_mux) ; 
     
-    printf("[ ] LeaderBoard : %s\n" , leaderboard) ; 
+    printf("[ ] Leaderboard : %s\n" , leaderboard) ; 
 
     //clear gli word indexes nei giocatori e resetta gli score
     clear_players_data(players_lis_ptr) ;
@@ -342,10 +350,11 @@ void * scorer(void * args){
     pthread_barrier_wait(&barrier);
     pthread_barrier_destroy(&barrier);
 
-    // se lo scorer ha finito, unlock sulla lista dei giocatori
+    // se lo scorer ha finito, sblocco le operazioni sulla lista dei giocatori
     pthread_mutex_unlock(&players_mux);
 
     printf("[ ] scorer ended\n"); 
+    pthread_detach(pthread_self()) ; 
     return NULL ; 
 }
 
@@ -386,7 +395,7 @@ void alarm_handler(int sig){
 
         //mando a tutti i client il messaggio per la nuova matrice
         char * buf = malloc(sizeof(char) * 32) ; 
-        buf[0] = '!' ; //autommatic response dal server, non una richiesta del client //autom
+        buf[0] = '!' ; //automatic response dal server, non una richiesta del client 
         int index = 1;
         for_all_matrix( buf[index++] = game_matrix[r][c] )
         // Add the null terminator at the end of the string
@@ -420,7 +429,7 @@ int main(int argc , char * argv[]){
     int rv;
 
     //server name
-    char *server_name = malloc(sizeof(char) * 25) ;
+    char server_name[25]  ;
     strcpy(server_name , argv[1]);
     //server port
     int server_port = atoi(argv[2]);
@@ -525,7 +534,7 @@ int main(int argc , char * argv[]){
     //inizializzazione della struttra server_addr
     server_addr.sin_family = AF_INET ;
     server_addr.sin_port = htons(server_port) ;
-    server_addr.sin_addr.s_addr = INADDR_ANY ;
+    server_addr.sin_addr.s_addr = inet_addr(server_name) ;
 
     //binding
     SYSC(rv , bind(server_fd , (struct sockaddr *)&server_addr , sizeof(server_addr)) , "nella bind");

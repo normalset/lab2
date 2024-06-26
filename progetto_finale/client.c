@@ -15,8 +15,8 @@
 #include <signal.h>
 
 //librerie custom
-#include "matrix.c"
-#include "paroliere.c"
+#include "libraries/matrix.c"
+#include "libraries/paroliere.c"
 
 //defines
 #define BUFFER_SIZE 1024
@@ -41,6 +41,7 @@ void my_signal_handler(int signum)
   printf("[ ] client exiting\n");
   silent_write_message(client_fd, MSG_CLIENT_QUIT, NULL);
   sem_destroy(&prompt_sem);
+  pthread_mutex_destroy(&mux);
   close(client_fd) ; 
   exit(EXIT_SUCCESS);
 
@@ -56,12 +57,12 @@ void * message_reader(void * args){
 
   messaggio msg ; 
   while(1){
-    //legge il messaggio 
-    msg = silent_read_message(client_fd) ; 
+    //legge il messaggio
+    msg = silent_read_message(client_fd);
 
     if(msg.type == MSG_ERR){
       if(msg.length != 0){
-        printf("\n[ERR] %s\n" , msg.data) ; 
+        printf("[ERR] %s\n" , msg.data) ; 
       }
       sem_post(&prompt_sem);
     }
@@ -69,11 +70,12 @@ void * message_reader(void * args){
     if(msg.type == MSG_OK && logged == 0){
       logged = 1 ;
       printf("[ ] Now logged in\n") ;
-      silent_write_message(client_fd , MSG_MATRICE , NULL);
+      mux_f(silent_write_message(client_fd , MSG_MATRICE , NULL), mux);
     }
 
     if(msg.type == MSG_MATRICE){
-      int autom = 0 ; //autom 
+      // controllo se la richiesta dal server e' stata dell'utente o automatica
+      int autom = 0 ;
       if(msg.data[0] == '!'){
         autom = 1 ;
       }
@@ -87,16 +89,17 @@ void * message_reader(void * args){
             }
           }
           printf("|\n");
-        } // autom
+        }
         if(autom){
-          silent_write_message(client_fd, MSG_TEMPO_PARTITA, "!");
+          mux_f(silent_write_message(client_fd, MSG_TEMPO_PARTITA, "!"), mux);
         }else{
-          silent_write_message(client_fd , MSG_TEMPO_PARTITA , NULL);
+          mux_f(silent_write_message(client_fd , MSG_TEMPO_PARTITA , NULL), mux);
         }
     }
 
     if(msg.type == MSG_TEMPO_PARTITA){
-      if((msg.data[0] == '!')){ //autom
+      // controllo se la richiesta dal server e' stata dell'utente o automatica
+      if((msg.data[0] == '!')){
         printf("[TIME] Tempo rimanente nella partita : %s\n", msg.data+1);
         int rv ; 
         SYSC(rv, write(STDOUT_FILENO, "[ PROMPT PAROLIERE ]--> ", sizeof("[ PROMPT PAROLIERE ]--> ")), "nella final score write");
@@ -119,7 +122,7 @@ void * message_reader(void * args){
 
     if(msg.type == MSG_PUNTI_FINALI){
       //printa il csv dei punti finali
-      printf("[FINAL] Classifica:\n");
+      printf("\n[FINAL] Classifica:\n");
       char * token ; 
       token = strtok(msg.data , ";");
       printf("%s\n" , token) ; 
@@ -139,7 +142,7 @@ void * message_reader(void * args){
     if(msg.type == MSG_ALARM){
       printf("\n------ TIME'S UP ! ------\n") ; 
       alarm_final_score = 1 ; 
-      silent_write_message(client_fd , MSG_ALARM , NULL) ;
+      mux_f(silent_write_message(client_fd , MSG_ALARM , NULL), mux) ;
     }
   }
 }
@@ -167,12 +170,12 @@ int main(int argc , char * argv[]){
   struct sockaddr_in server_addr;
 
   // Creazione del socket
-  SYSC(client_fd, socket(AF_INET, SOCK_STREAM, 0), "nella socket");
+  SYSC(client_fd, socket(AF_INET, SOCK_STREAM, 0), "nella socket");  
 
   // Inizializzazione della struttura server_addr
   server_addr.sin_family = AF_INET;
   server_addr.sin_port = htons(server_port);
-  server_addr.sin_addr.s_addr = INADDR_ANY;
+  server_addr.sin_addr.s_addr = inet_addr(server_name);
 
   // Connect
   SYSC(rv, connect(client_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)), "nella connect");
@@ -196,7 +199,7 @@ int main(int argc , char * argv[]){
 
   //main game loop
   while(1){
-    sem_wait(&prompt_sem) ; 
+    sem_wait(&prompt_sem) ;
     printf("%s", prompt);
     //read user input 
     scanf("%s" , usr_input) ; 
@@ -214,7 +217,7 @@ int main(int argc , char * argv[]){
     //comando matrice
     else if(strcmp(usr_input , "matrice") == 0 ){
       if(logged){//mando un messaggio matrice al server
-        silent_write_message(client_fd , MSG_MATRICE , NULL) ;
+        mux_f(silent_write_message(client_fd , MSG_MATRICE , NULL), mux) ;
         continue ;
       }else{
         printf("[ERR] Log in to see matrix\n") ;
@@ -226,28 +229,40 @@ int main(int argc , char * argv[]){
     //comando fine
     else if(strcmp(usr_input , "fine") == 0){
       printf("[ ] client exiting\n");
-      silent_write_message(client_fd , MSG_CLIENT_QUIT , NULL) ;
+      mux_f(silent_write_message(client_fd , MSG_CLIENT_QUIT , NULL), mux) ;
       sem_destroy(&prompt_sem);
       close(client_fd); 
+      pthread_mutex_destroy(&mux);
+
+      //fermo anche il reader thread
+      if ((rv = pthread_detach(client_tid)) != 0 ) {
+        perror("nella pthread_detach");
+        exit(EXIT_FAILURE);
+      };
+      if ((rv = pthread_cancel(client_tid)) != 0)
+      {
+        perror("nella pthread_cancel");
+        exit(EXIT_FAILURE);
+      };
       exit(EXIT_SUCCESS);
     }
 
     //comando registra utente
     else if(strcmp(usr_input , "registra_utente") == 0){
       if(logged){ // se sono gia' loggato non posso usare il comando
-        printf("[ERR] Already logged in");
+        printf("[ERR] Already logged in\n");
         sem_post(&prompt_sem);
         continue; 
       }
 
       //primo check sulla lunghezza
       if(strlen(usr_arg) > 10){
-        printf("[ERR] Lunghezza MAX nome superata") ;
+        printf("[ERR] Lunghezza MAX nome superata\n") ;
         sem_post(&prompt_sem);
         continue ;
       }
       //scrivo il messaggio con il nome
-      silent_write_message(client_fd, MSG_REGISTRA_UTENTE, usr_arg);
+      mux_f(silent_write_message(client_fd, MSG_REGISTRA_UTENTE, usr_arg), mux);
     }
 
     //comando parola
@@ -259,7 +274,7 @@ int main(int argc , char * argv[]){
           sem_post(&prompt_sem);
           continue ;
         }
-        silent_write_message(client_fd, MSG_PAROLA, usr_arg);
+        mux_f(silent_write_message(client_fd, MSG_PAROLA, usr_arg), mux);
       } else { //se non sono loggato devo loggare
         printf("[ERR] You have to be logged in to guess , log with registra_utente\n");
         sem_post(&prompt_sem);
@@ -268,7 +283,7 @@ int main(int argc , char * argv[]){
     }
     
     else if(strcmp(usr_input , "classifica") == 0){
-      silent_write_message(client_fd , MSG_PUNTI_FINALI , NULL) ; 
+      mux_f(silent_write_message(client_fd , MSG_PUNTI_FINALI , NULL), mux) ; 
     }
 
     //input non riconosciuto

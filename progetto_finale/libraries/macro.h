@@ -8,3 +8,7 @@
   if((r=c) != 0) {perror(m) ; exit(EXIT_FAILURE); }
 
 #define BUF_SIZE 256
+
+#define mux_f(f, mux)         \
+  pthread_mutex_lock(&(mux)); f; pthread_mutex_unlock(&(mux))
+  
